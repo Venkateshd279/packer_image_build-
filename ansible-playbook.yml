@@ -1,0 +1,41 @@
+- name: 'Provision Packer Image'
+  hosts: default
+  become: true
+
+  tasks:
+  - name: Stop XDR (to speed up lerna build)
+    ansible.builtin.service:
+      name: "{{ item }}"
+      state: stopped
+    loop:
+    - cyphon-fim
+    - cyphon-monitor
+    - sentinelone
+
+  - name: Copy ssh key
+    ansible.builtin.copy:
+      src: "{{ kpn_ssh_key_path }}"
+      dest: "/root/.ssh/bitbucket"
+      owner: root
+      group: admin
+      mode: '0400'
+
+  - name: Copy ~/.ssh/config
+    ansible.builtin.copy:
+      content: |
+        Host bitbucket.org
+          Hostname bitbucket.org
+          IdentityFile /root/.ssh/bitbucket
+          StrictHostKeyChecking no
+      dest: "/root/.ssh/config"
+      owner: root
+      group: admin
+      mode: '0644'
+
+  - name: Git checkout kpn monorepo
+    ansible.builtin.git:
+      repo: 'git@bitbucket.org:company-name/repo-name.git'
+      dest: /data/kpn/
+      version: "{{ git_ref }}"
+
+ 

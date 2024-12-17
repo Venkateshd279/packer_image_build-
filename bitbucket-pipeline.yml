@@ -1,0 +1,46 @@
+
+image: public.ecr.aws/hhhhhh/name/packer:latest
+pipelines:
+  branches:
+    '{testing-packer}':
+      - step:
+          name: 'AMI Build'
+          script:
+          # Installing Python libraries botocore and boto3
+          - pip install botocore boto3
+          
+          # Exporting the AWS Credentials
+          - export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+          - export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+          - export TAG_NAME=${TAG_NAME}
+          
+    
+          # Fetching Public & Private keys from AWS SSM Parameter
+          #Priv_Key="$(aws --region=us-west-2 ssm get-parameters --names "/packer/bitbucket_ed25519/private_key" --with-decryption --query "Parameters[*].{Value:Value}" --output text)"
+          #Publ_Key="$(aws --region=us-west-2 ssm get-parameters --names "/packer/bitbucket_ed25519/pub_key" --with-decryption --query "Parameters[*].{Value:Value}" --output text)"
+          - Priv_Key="$(aws --region=us-west-2 ssm get-parameters --names "/packer/bitbucket_new/private_key" --with-decryption --query "Parameters[*].{Value:Value}" --output text)"
+          - Publ_Key="$(aws --region=us-west-2 ssm get-parameters --names "/packer/bitbucket_new/pub_key" --with-decryption --query "Parameters[*].{Value:Value}" --output text)"
+          #/packer/bitbucket_new/private_key
+          #/packer/bitbucket_new/pub_key
+          
+          # Saving the private key to the SSH configuration
+          - echo $Priv_Key > ~/.ssh/bitbucket
+          - echo $Publ_Key > ~/.ssh/bitbucket.pub
+          - echo $Publ_Key > ~/.ssh/authorized_keys
+          - echo $Publ_Key > /etc/ssh/ssh_known_hosts
+
+          # Changing the permission for the Public & Private keys
+          - chmod 400 ~/.ssh/bitbucket
+          - chmod 400 ~/.ssh/bitbucket.pub
+
+          # authenticate git using the private key
+          - ssh -T git@bitbucket.org
+
+
+          # Updating the SSH config file
+          - echo -e "Host bitbucket.org\n     StrictHostKeyChecking no\n     Hostname bitbucket.org\n     AddKeysToAgent yes\n     IdentityFile /root/.ssh/bitbucket" > ~/.ssh/config
+
+          # Build the AMI Using Packer Build Command
+          - packer build -debug -var kpn_ssh_key_path="/root/.ssh/bitbucket" --var git_ref="${TAG_NAME}"  . 
+
+          
